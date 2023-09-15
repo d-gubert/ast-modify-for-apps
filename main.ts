@@ -115,4 +115,4 @@ Deno.writeTextFileSync(
   "./modified_ast.json",
   JSON.stringify(ast, undefined, 4),
 );
-Deno.writeTextFileSync("./astring_generated.js", newSource);
+Deno.writeTextFileSync("./astring_generated_source.js", newSource);
