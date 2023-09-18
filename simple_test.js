@@ -6,40 +6,52 @@ class LivechatRead {
   }
 }
 
-const arrowFunction = () => {
-  let _ = a.getLivechatReader().isOnline;
+c = function() {
 }
 
-arrowFunction();
 
-const a = { getLivechatReader() { return new LivechatRead() } }
+const arrowFunction = () => {
+  let _ = topLevelReadMock.getLivechatReader().isOnline;
+}
 
-a.getLivechatReader().isOnline();
+(function iife() {
+  const arrowFunctionReturn = arrowFunction();
+})();
+
+const topLevelReadMock = { getLivechatReader() { return new LivechatRead() } }
+
+topLevelReadMock.getLivechatReader().isOnline();
 
 function test() {
-    while (a.getLivechatReader().isOnline()) {
+    while (topLevelReadMock.getLivechatReader().isOnline()) {
         continue;
     }
 }
 
-for (let i = a.getLivechatReader().isOnline; i < a.getLivechatReader().isOnline(); i = a.getLivechatReader().isOnline()) {
+test();
+
+for (let i = topLevelReadMock.getLivechatReader().isOnline; i < topLevelReadMock.getLivechatReader().isOnline(); i = topLevelReadMock.getLivechatReader().isOnline()) {
   continue;
 }
 
 do {
   continue;
-} while(await a.getLivechatReader().isOnline());
+} while(await topLevelReadMock.getLivechatReader().isOnline());
 
-b(a.getLivechatReader().isOnline())
+nonExistentFunctionCall(topLevelReadMock.getLivechatReader().isOnline())
 
-let boundIsOnlineCall = a.getLivechatReader().isOnline().bind();
+let boundIsOnlineCall = topLevelReadMock.getLivechatReader().isOnline().bind();
 
-let boundIsOnlineAccess = a.getLivechatReader().isOnline.bind();
+let { boundIsOnlineAccess } = topLevelReadMock.getLivechatReader().isOnline.bind();
 
-var x = {
-  [a.getLivechatReader().isOnline()]: a.getLivechatReader().isOnline()
+var objectWithDynamicallyNamedProp = {
+  [topLevelReadMock.getLivechatReader().isOnline()]: function() { return 1; },
+  namedProp: () => { return 2 },
+  property: topLevelReadMock.getLivechatReader().isOnline(),
+  iifeProp: (function() { return 'bah' })(),
 }
 
-throw a.getLivechatReader().isOnline()
+throw topLevelReadMock.getLivechatReader().isOnline()
 
-a.getLivechatReader().isOnline()
+topLevelReadMock.getLivechatReader().isOnline()
+

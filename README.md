@@ -4,7 +4,7 @@ In the effort of changing the runtime used in the [Apps-Engine](https://github.c
 
 Here I try to find a way to manipulate the app's AST in worder to wrap the rogue methods in `await` calls so they will still work as expected.
 
-The state here is pretty much still a WIP.
+The solution here is a valid poc - it achieves its goal but needs refactoring.
 
 ## Instructions
 
@@ -12,7 +12,7 @@ This is a deno project, the entry point is `main.ts`, so you should run `deno ru
 
 Currently, `main.ts` reads the `simple_test.js` file, uses `acorn` to parse it into an AST, uses `acorn-walk` to traverse it and modify it in place, and finally uses `astring` to print modified AST to a new source file.
 
-The program outputs three files:
+The program outputs three files in the `./output` folder:
 - `original_ast.json` - the AST initially parsed by `acorn`
 - `modified_ast.json` - the AST after being modified
 - `astring_generated_source.js` - the new source with applied modifications

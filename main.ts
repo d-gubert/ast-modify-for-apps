@@ -4,7 +4,6 @@ const originalSource = new TextDecoder().decode(
   Deno.readFileSync("./simple_test.js"),
 );
 
-// console.log(meriyah.parseScript(googleCalendarAppSource, { specDeviation: true }));
 console.time("parse");
 const ast = acorn.parse(originalSource, {
   ecmaVersion: 2017,
@@ -20,23 +19,90 @@ const ast = acorn.parse(originalSource, {
 console.timeEnd("parse");
 
 Deno.writeTextFileSync(
-  "./original_ast.json",
+  "./output/original_ast.json",
   JSON.stringify(ast, undefined, 4),
 );
 
 const expressions = new Set();
-const asyncifyScope = (node, state, ancestor) => {
-  const parentFunctionScope = ancestor.find((n) => "async" in n);
-  if (!parentFunctionScope) return;
-  console.log({ parentFunctionScope });
+const pendingOperations: Array<(...args: unknown[]) => (() => void) | undefined> = [];
 
-  if (parentFunctionScope.async) {
-    return false;
+const buildFunctionPredicate = (functionIdentifier: string) => (node, state, ancestors) => {
+  if (node.type !== 'CallExpression') return;
+
+  let isValid = false;
+
+  // This would be a call to any other function that's not the one we want
+  if (node.callee.type === "Identifier" && node.callee.name === functionIdentifier) isValid = true;
+
+  if (!isValid && (node.callee.type !== "MemberExpression" || node.callee.property?.type !== "Identifier" || node.callee.property?.name !== functionIdentifier)) return;
+
+  // Should .we further narrow the member expression to determine whether it is the correct chain?
+
+  // ancestors[ancestors.length-1] === node, so here we're checking for parent node
+  if (!ancestors[ancestors.length-2] || ancestors[ancestors.length-2].type === 'AwaitExpression') return;
+
+  return () => {
+    wrapWithAwait(node);
+    asyncifyScope(ancestors);
+  }
+}
+
+const getFunctionIdentifier = (ancestors, nodeIndex) => {
+  const currentNode = ancestors[nodeIndex];
+  // Function declarations or expressions can be directly named
+  if (currentNode.id?.type === "Identifier") {
+    return currentNode.id.name;
   }
 
-  parentFunctionScope.async = true;
-  return true;
-  // console.log(ancestor.find((n) => n.type === "Program"));
+  const parent = ancestors[nodeIndex-1];
+
+  // If we don't have a parente node to provide an identifier
+  // or that parent is either a Property or MethodDefinition which
+  // identifier is dynamically assigned at run time, we cannot determine
+  // the proper identification for the node
+  if (!parent || parent.computed) return;
+
+  // Several node types can have an id prop of type Identifier
+  if (parent.id?.type === "Identifier") {
+    return parent.id.name;
+  }
+
+  // Usually assignments to object properties (MethodDefinition, Property)
+  if (parent.key?.type === "Identifier") {
+    return parent.key.name;
+  }
+
+  // Variable assignments have left hand and right hand properties
+  if (parent.left?.type === "Identifier") {
+    return parent.left.name;
+  }
+}
+
+const asyncifyScope = (ancestors) => {
+  const functionScopeIndex = ancestors.findLastIndex((n) => "async" in n);
+  if (functionScopeIndex === -1) return;
+
+  const functionScopeNode = ancestors[functionScopeIndex];
+
+  if (functionScopeNode.async) {
+    return;
+  }
+
+  functionScopeNode.async = true;
+
+  // If the parent of a function node is a call expression, we're talking about an IIFE
+  // Should we care about this case as well?
+  // const parentNode = ancestors[functionScopeIndex-1];
+  // if (parentNode?.type === 'CallExpression' && ancestors[functionScopeIndex-2] && ancestors[functionScopeIndex-2].type !== 'AwaitExpression') {
+  //   pendingOperations.push(buildFunctionPredicate(getFunctionIdentifier(ancestors, functionScopeIndex-2)));
+  // }
+
+  const identifier = getFunctionIdentifier(ancestors, functionScopeIndex);
+
+  // We can't fix calls of functions we can't name at compile time
+  if (!identifier) return;
+
+  pendingOperations.push(buildFunctionPredicate(identifier));
 };
 
 const wrapWithAwait = (node) => {
@@ -54,7 +120,7 @@ const wrapWithAwait = (node) => {
   );
 };
 
-const livechatIsOnlinePredicate = (node, state, ancestor) => {
+const livechatIsOnlinePredicate = (node, state, ancestors) => {
   if (node.type !== "MemberExpression") return;
 
   if (node.property.name !== "isOnline") return;
@@ -65,14 +131,14 @@ const livechatIsOnlinePredicate = (node, state, ancestor) => {
 
   if (node.object.callee.property.name !== "getLivechatReader") return;
 
-  let nodeToWrap = ancestor[ancestor.length - 2];
+  let targetNode = ancestors[ancestors.length - 2];
 
-  if (nodeToWrap.type !== "CallExpression") nodeToWrap = node;
+  if (targetNode.type !== "CallExpression") targetNode = node;
 
-  const parentPos = ancestor.lastIndexOf(nodeToWrap) - 1;
+  const parentPos = ancestors.lastIndexOf(targetNode) - 1;
 
   // If we're already wrapped with an await, nothing to do
-  if (ancestor[parentPos].type === "AwaitExpression") return;
+  if (ancestors[parentPos].type === "AwaitExpression") return;
 
   // console.log(
   //   "TARGET NODE =",
@@ -84,35 +150,62 @@ const livechatIsOnlinePredicate = (node, state, ancestor) => {
   // );
 
   // If we're in the middle of a chained member access, we can't wrap with await
-  if (ancestor[parentPos].type === "MemberExpression") return;
+  if (ancestors[parentPos].type === "MemberExpression") return;
 
-  return wrapWithAwait.bind(null, nodeToWrap);
+  return () => {
+    wrapWithAwait(targetNode);
+    asyncifyScope(ancestors);
+  }
   // return () => {};
 };
 
-console.time("traverse");
-acornWalk.fullAncestor(ast, (node, state, ancestor) => {
-  const fix = predicate(node, state, ancestor);
-  if (!fix) return;
+pendingOperations.push(livechatIsOnlinePredicate);
 
-  fix();
+// Have we touched the tree?
+let isModified = false;
 
-  asyncifyScope(node, state, ancestor);
+while (pendingOperations.length) {
+  const ops = pendingOperations.splice(0);
+  console.time("traverse");
+  acornWalk.fullAncestor(ast, (node, state, ancestors) => {
+    // const fix = livechatIsOnlinePredicate(node, state, ancestors);
+    let fix: (() => void) | undefined;
 
-  // console.log(ancestor[ancestor.length-5],ancestor[ancestor.length-4],ancestor[ancestor.length-3], ancestor[ancestor.length-2]);
+    for (const operation of ops) {
+      fix = operation(node, state, ancestors);
+      if (fix) {
+        break;
+      }
+    }
 
-  // console.log(ancestor);
-  expressions.add(node);
-});
-console.timeEnd("traverse");
+    if (!fix || !('call' in fix)) return;
+
+    fix();
+
+    isModified = true;
+
+    // console.log(ancestor[ancestor.length-5],ancestor[ancestor.length-4],ancestor[ancestor.length-3], ancestor[ancestor.length-2]);
+
+    // console.log(ancestor);
+    expressions.add(node);
+  });
+  console.timeEnd("traverse");
+}
 // console.log(expressions);
 
-console.time("generate");
-const newSource = astring.generate(ast);
-console.timeEnd("generate");
+if (isModified) {
+  console.time("generate");
+  const newSource = `(async (exports,module,require,globalThis,Deno) => {
+    ${astring.generate(ast)};
+  })(exports,module,require);
+  `;
+  console.timeEnd("generate");
 
-Deno.writeTextFileSync(
-  "./modified_ast.json",
-  JSON.stringify(ast, undefined, 4),
-);
-Deno.writeTextFileSync("./astring_generated_source.js", newSource);
+  Deno.writeTextFileSync(
+    "./output/modified_ast.json",
+    JSON.stringify(ast, undefined, 4),
+  );
+  Deno.writeTextFileSync("./output/astring_generated_source.js", newSource);
+} else {
+  console.log('Not modified');
+}
