@@ -1,35 +1,23 @@
 {
   "version": "2",
-  "remote": {
-    "https://deno.land/x/astring@v1.8.6/src/astring.js": "457e5fd0b72da2a365c33059c8846d9cb37dc5e5f1010332d13afae540323da0",
-    "https://esm.sh/acorn-loose@8.3.0": "f05a1b5b1925e6cd50db53b032136fdaa3aa67f685230809f3e10ef9e4c424d9",
-    "https://esm.sh/acorn-walk@8.2.0": "e178f6fc9ea2b7092ebdb95ffffddafd6b6369287cfebd6263d34d2979a7fca9",
-    "https://esm.sh/acorn@8.10.0": "596f400609a30664004f9f5a740e37c491e428080296aaa3db2ee0a4d7dfede7",
-    "https://esm.sh/acorn@8.7.0": "bff23a515e665544fb7409b25806edd7e12356e9b96bb9622b274eb2cf1fc4fa",
-    "https://esm.sh/astravel@0.6.1": "765ae814b5332ba70771b13e8e178cf000ee0f5c6ee0ea8036a3f500cd30eecf",
-    "https://esm.sh/astring@1.8.6": "e302bc058cf2ab1f00741821cff3aa6c9420de76e438bb4c6b909fc2ab8813c1",
-    "https://esm.sh/meriyah@4.3.7": "f1ff4f39bd3e595633b283018697c953fcd32310b4d40a5e566828fcd68c33bb",
-    "https://esm.sh/v129/acorn-loose@8.3.0/denonext/acorn-loose.mjs": "b82df2753e0ed6a14013af64d91e885234d92265c6c9830df515858bec6c2ee6",
-    "https://esm.sh/v129/acorn@8.10.0/denonext/acorn.mjs": "e14fdd9d1767c50f8c9028ff085b2c669e0fbb0710317296a2cbf6094b49680c",
-    "https://esm.sh/v131/meriyah@4.3.7/denonext/meriyah.mjs": "38a81a7c69d038605b4e7090395704a3bf35e6c8cd9d8b622e268b4585486cce",
-    "https://esm.sh/v132/acorn-walk@8.2.0/denonext/acorn-walk.mjs": "ce93c0f147f06c360d792b9a81d684de7558539671e0a4d1adff8358cc774c6d",
-    "https://esm.sh/v132/acorn@8.10.0/denonext/acorn.mjs": "e14fdd9d1767c50f8c9028ff085b2c669e0fbb0710317296a2cbf6094b49680c",
-    "https://esm.sh/v132/acorn@8.7.0/denonext/acorn.mjs": "8607391033570ad5517c17f8016ba1a2de60f977ebb7f82753a311be12bae6e1",
-    "https://esm.sh/v132/astravel@0.6.1/denonext/astravel.mjs": "f480684c92bfd903e978c6c88f042ce8f17177401dab9087027f6803b7cd9e2a",
-    "https://esm.sh/v132/astring@1.8.6/denonext/astring.mjs": "e851defe7aef30e249bd193857f24ff5b67cfd1f43058d685787efb1088a3c8c"
-  },
+  "remote": {},
   "npm": {
     "specifiers": {
-      "astravel": "astravel@0.6.1",
-      "typescript@5": "typescript@5.1.6"
+      "acorn-walk@8.2.0": "acorn-walk@8.2.0",
+      "acorn@8.10.0": "acorn@8.10.0",
+      "astring@1.8.6": "astring@1.8.6"
     },
     "packages": {
-      "astravel@0.6.1": {
-        "integrity": "sha512-ZIkgWFIV0Yo423Vqalz7VcF+BAiISvSgplnkV2abPGACPFKofsWTcvr9SFyYM/t/vMZWqmdP/Eze6ATX7r84Dg==",
+      "acorn-walk@8.2.0": {
+        "integrity": "sha512-k+iyHEuPgSw6SbuDpGQM+06HQUa04DZ3o+F6CSzXMvvI5KMvnaEqXe+YVe555R9nn6GPt404fos4wcgpw12SDA==",
         "dependencies": {}
       },
-      "typescript@5.1.6": {
-        "integrity": "sha512-zaWCozRZ6DLEWAWFrVDz1H6FVXzUSfTy5FUMWsQlU8Ym5JP9eO4xkTIROFCQvhQf61z6O/G6ugw3SgAnvvm+HA==",
+      "acorn@8.10.0": {
+        "integrity": "sha512-F0SAmZ8iUtS//m8DmCTA0jlh6TDKkHQyK6xc6V4KDTyZKA9dnvX9/3sRTVQrWm79glUAZbnmmNcdYwUIHWVybw==",
+        "dependencies": {}
+      },
+      "astring@1.8.6": {
+        "integrity": "sha512-ISvCdHdlTDlH5IpxQJIex7BWBywFWgjJSVdwst+/iQCoEYnyOaQ95+X1JGshuBjGp6nxKUy1jMgE3zPqN7fQdg==",
         "dependencies": {}
       }
     }
