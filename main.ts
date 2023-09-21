@@ -2,6 +2,7 @@ import { acorn, acornWalk, astring } from "./deps.ts";
 
 const originalSource = new TextDecoder().decode(
   Deno.readFileSync("./simple_test.js"),
+  // Deno.readFileSync("./GoogleDriveApp.js"),
 );
 
 console.time("parse");
@@ -24,30 +25,38 @@ Deno.writeTextFileSync(
 );
 
 const expressions = new Set();
-const pendingOperations: Array<(...args: unknown[]) => (() => void) | undefined> = [];
+const pendingOperations: Array<(node: any, state: Set<string>, ancestors: any[]) => void> = [];
 
-const buildFunctionPredicate = (functionIdentifier: string) => (node, state, ancestors) => {
+const buildFunctionPredicate = (functionIdentifiers: Set<string>) => (node: any, state: Set<string>, ancestors: any[]) => {
   if (node.type !== 'CallExpression') return;
 
   let isValid = false;
 
-  // This would be a call to any other function that's not the one we want
-  if (node.callee.type === "Identifier" && node.callee.name === functionIdentifier) isValid = true;
+  // This is a simple call to a function, like `fn()`
+  isValid = (node.callee.type === "Identifier" && functionIdentifiers.has(node.callee.name));
 
-  if (!isValid && (node.callee.type !== "MemberExpression" || node.callee.property?.type !== "Identifier" || node.callee.property?.name !== functionIdentifier)) return;
+  // This is a call to an object property or instance method, like `obj.fn()`, but not computed like `obj[fn]()`
+  isValid ||= (node.callee.type === "MemberExpression" && !node.callee.computed && node.callee.property?.type === "Identifier" && functionIdentifiers.has(node.callee.property?.name));
+
+  // This is a weird dereferencing technique used by bundlers, and since we'll be dealing with bundled source we have to check for it
+  if (!isValid && node.callee.type === "SequenceExpression") {
+    const [,secondExpression] = node.callee.expressions;
+    isValid = secondExpression?.type === "Identifier" && functionIdentifiers.has(secondExpression.name);
+    isValid ||= secondExpression?.type === "MemberExpression" && !secondExpression.computed && functionIdentifiers.has(secondExpression.property.name);
+  }
+
+  if (!isValid) return;
 
   // Should .we further narrow the member expression to determine whether it is the correct chain?
 
   // ancestors[ancestors.length-1] === node, so here we're checking for parent node
   if (!ancestors[ancestors.length-2] || ancestors[ancestors.length-2].type === 'AwaitExpression') return;
 
-  return () => {
-    wrapWithAwait(node);
-    asyncifyScope(ancestors);
-  }
+  wrapWithAwait(node);
+  asyncifyScope(ancestors, state);
 }
 
-const getFunctionIdentifier = (ancestors, nodeIndex) => {
+const getFunctionIdentifier = (ancestors, nodeIndex: number) => {
   const currentNode = ancestors[nodeIndex];
   // Function declarations or expressions can be directly named
   if (currentNode.id?.type === "Identifier") {
@@ -78,7 +87,7 @@ const getFunctionIdentifier = (ancestors, nodeIndex) => {
   }
 }
 
-const asyncifyScope = (ancestors) => {
+const asyncifyScope = (ancestors: any[], state: Set<string>) => {
   const functionScopeIndex = ancestors.findLastIndex((n) => "async" in n);
   if (functionScopeIndex === -1) return;
 
@@ -102,7 +111,8 @@ const asyncifyScope = (ancestors) => {
   // We can't fix calls of functions we can't name at compile time
   if (!identifier) return;
 
-  pendingOperations.push(buildFunctionPredicate(identifier));
+  // pendingOperations.push(buildFunctionPredicate(identifier));
+  state.add(identifier);
 };
 
 const wrapWithAwait = (node) => {
@@ -120,7 +130,7 @@ const wrapWithAwait = (node) => {
   );
 };
 
-const livechatIsOnlinePredicate = (node, state, ancestors) => {
+const livechatIsOnlinePredicate = (node, state: Set<string>, ancestors: any[]) => {
   if (node.type !== "MemberExpression") return;
 
   if (node.property.name !== "isOnline") return;
@@ -131,14 +141,17 @@ const livechatIsOnlinePredicate = (node, state, ancestors) => {
 
   if (node.object.callee.property.name !== "getLivechatReader") return;
 
-  let targetNode = ancestors[ancestors.length - 2];
+  let parentIndex = ancestors.length - 2;
+  let targetNode = ancestors[parentIndex];
 
-  if (targetNode.type !== "CallExpression") targetNode = node;
-
-  const parentPos = ancestors.lastIndexOf(targetNode) - 1;
+  if (targetNode.type !== "CallExpression") {
+    targetNode = node;
+  } else {
+    parentIndex--;
+  }
 
   // If we're already wrapped with an await, nothing to do
-  if (ancestors[parentPos].type === "AwaitExpression") return;
+  if (ancestors[parentIndex].type === "AwaitExpression") return;
 
   // console.log(
   //   "TARGET NODE =",
@@ -150,37 +163,64 @@ const livechatIsOnlinePredicate = (node, state, ancestors) => {
   // );
 
   // If we're in the middle of a chained member access, we can't wrap with await
-  if (ancestors[parentPos].type === "MemberExpression") return;
+  if (ancestors[parentIndex].type === "MemberExpression") return;
 
-  return () => {
-    wrapWithAwait(targetNode);
-    asyncifyScope(ancestors);
-  }
+  wrapWithAwait(targetNode);
+  asyncifyScope(ancestors, state);
   // return () => {};
 };
 
-pendingOperations.push(livechatIsOnlinePredicate);
+const isReassignmentOfIdentifierPredicate = (node, state: Set<string>, ancestors: any[]) => {
+  if (node.type === "AssignmentExpression") {
+    if (node.operator !== "=") return;
+
+    let identifier;
+
+    if (node.left.type === "Identifier") identifier = node.left.name;
+
+    if (node.left.type === "MemberExpression" && !node.left.computed) identifier = node.left.property.name;
+
+    if (!identifier || node.right.type !== "Identifier" || !state.has(node.right.name)) return;
+
+    state.add(identifier);
+
+    return;
+  }
+
+  if (node.type === "VariableDeclarator") {
+    // console.log(node, state)
+    if (node.id.type !== "Identifier" || state.has(node.id.name))  return;
+
+    if (node.init?.type !== "Identifier" || !state.has(node?.init.name)) return;
+
+    state.add(node.id.name);
+
+    return;
+  }
+
+  if (node.type === "Property") {
+    // console.log(node, state)
+    if (node.key.type !== "Identifier" || state.has(node.key.name)) return;
+
+    if (node.value?.type !== "Identifier" || !state.has(node.value?.name)) return;
+
+    state.add(node.key.name);
+
+    return;
+  }
+}
+
+pendingOperations.push(livechatIsOnlinePredicate, isReassignmentOfIdentifierPredicate);
 
 // Have we touched the tree?
 let isModified = false;
 
 while (pendingOperations.length) {
   const ops = pendingOperations.splice(0);
+  const functionIdentifiers = new Set<string>();
   console.time("traverse");
-  acornWalk.fullAncestor(ast, (node, state, ancestors) => {
-    // const fix = livechatIsOnlinePredicate(node, state, ancestors);
-    let fix: (() => void) | undefined;
-
-    for (const operation of ops) {
-      fix = operation(node, state, ancestors);
-      if (fix) {
-        break;
-      }
-    }
-
-    if (!fix || !('call' in fix)) return;
-
-    fix();
+  acornWalk.fullAncestor<Set<string>>(ast, (node, state, ancestors) => {
+    ops.forEach(operation => operation(node, state, ancestors));
 
     isModified = true;
 
@@ -188,8 +228,13 @@ while (pendingOperations.length) {
 
     // console.log(ancestor);
     expressions.add(node);
-  });
+  }, undefined, functionIdentifiers);
   console.timeEnd("traverse");
+
+  if (functionIdentifiers.size) {
+    console.log(functionIdentifiers)
+    pendingOperations.push(buildFunctionPredicate(functionIdentifiers), isReassignmentOfIdentifierPredicate);
+  }
 }
 // console.log(expressions);
 
