@@ -1,5 +1,4 @@
-(async (exports,module,require,globalThis,Deno) => {
-    require('w');
+require('w');
 class LivechatRead {
   isOnline() {
     return 1;
@@ -9,21 +8,19 @@ c = function () {};
 const arrowFunction = async () => {
   let _ = await topLevelReadMock.getLivechatReader().isOnline;
 };
-(async function iife() {
-  const arrowFunctionReturn = await arrowFunction();
+(function iife() {
+  const arrowFunctionReturn = arrowFunction;
 })();
-const topLevelReadMock = {
+const topLevelReadMock = ({
   getLivechatReader() {
     return new LivechatRead();
   }
-};
-await topLevelReadMock.getLivechatReader().isOnline();
+})(async () => (0, await topLevelReadMock.getLivechatReader().isOnline)() ? 1 : 2);
 async function test() {
   while (await topLevelReadMock.getLivechatReader().isOnline()) {
     continue;
   }
 }
-await test();
 for (let i = await topLevelReadMock.getLivechatReader().isOnline; i < await topLevelReadMock.getLivechatReader().isOnline(); i = await topLevelReadMock.getLivechatReader().isOnline()) {
   continue;
 }
@@ -31,7 +28,7 @@ do {
   continue;
 } while (await topLevelReadMock.getLivechatReader().isOnline());
 nonExistentFunctionCall(await topLevelReadMock.getLivechatReader().isOnline());
-let boundIsOnlineCall = topLevelReadMock.getLivechatReader().isOnline().bind();
+let l, boundIsOnlineCall = topLevelReadMock.getLivechatReader().isOnline().bind();
 let {boundIsOnlineAccess} = topLevelReadMock.getLivechatReader().isOnline.bind();
 var objectWithDynamicallyNamedProp = {
   [await topLevelReadMock.getLivechatReader().isOnline()]: function () {
@@ -41,12 +38,12 @@ var objectWithDynamicallyNamedProp = {
     return 2;
   },
   property: await topLevelReadMock.getLivechatReader().isOnline(),
+  h: i,
   iifeProp: (function () {
     return 'bah';
   })()
 };
+objectWithDynamicallyNamedProp.iife.h = arrowFunction;
+objectWithDynamicallyNamedProp[l] = arrowFunction;
 throw await topLevelReadMock.getLivechatReader().isOnline();
 await topLevelReadMock.getLivechatReader().isOnline();
-;
-  })(exports,module,require);
-  
