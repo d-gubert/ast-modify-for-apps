@@ -1,6 +1,6 @@
 export interface Node {
-  start: number
-  end: number
+  start?: number
+  end?: number
   type: string
   range?: [number, number]
   loc?: SourceLocation | null

@@ -1,6 +1,6 @@
 import { fixAst, generateSource, parseAst } from "./mod.ts";
 
-const originalSource = Deno.readTextFileSync("./simple_test.js");
+const originalSource = Deno.readTextFileSync("./simple_example.js");
 // const originalSource = Deno.readTextFileSync("./GoogleDriveApp.js"),
 
 console.time("parse");
