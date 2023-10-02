@@ -1,5 +1,5 @@
 // @deno-types="./acorn.d.ts"
-import { AnyNode, AssignmentExpression, AwaitExpression, Expression, Function, Identifier, MethodDefinition, Program, Property } from 'acorn';
+import { AnyNode, AssignmentExpression, AwaitExpression, Expression, Function, Identifier, MethodDefinition, Property } from 'acorn';
 // @deno-types="./acorn-walk.d.ts"
 import { FullAncestorWalkerCallback } from 'acorn-walk';
 
@@ -8,43 +8,57 @@ export type WalkerState = {
     functionIdentifiers: Set<string>;
 };
 
-const getFunctionIdentifier = (ancestors: AnyNode[], functionNodeIndex: number) => {
+export function getFunctionIdentifier(ancestors: AnyNode[], functionNodeIndex: number) {
+    const parent = ancestors[functionNodeIndex - 1];
+
+    // If there is a parent node and it's not a computed property, we can try to
+    // extract an identifier for our function from it. This needs to be done first
+    // because when functions are assigned to named symbols, this will be the only
+    // way to call it, even if the function itself has an identifier
+    // Consider the following block:
+    //
+    // const foo = function bar() {}
+    //
+    // Even though the function itself has a name, the only way to call it in the
+    // program is wiht `foo()`
+    if (parent && !(parent as Property | MethodDefinition).computed) {
+        // Several node types can have an id prop of type Identifier
+        const { id } = parent as unknown as { id?: Identifier };
+        if (id?.type === 'Identifier') {
+            return id.name;
+        }
+
+        // Usually assignments to object properties (MethodDefinition, Property)
+        const { key } = parent as MethodDefinition | Property;
+        if (key?.type === 'Identifier') {
+            return key.name;
+        }
+
+        // Variable assignments have left hand side that can be used as Identifier
+        const { left } = parent as AssignmentExpression;
+
+        // Simple assignment: `const fn = () => {}`
+        if (left?.type === 'Identifier') {
+            return left.name;
+        }
+
+        // Object property assignment: `obj.fn = () => {}`
+        if (left?.type === 'MemberExpression' && !left.computed) {
+            return (left.property as Identifier).name;
+        }
+    }
+
     // nodeIndex needs to be the index of a Function node (either FunctionDeclaration or FunctionExpression)
     const currentNode = ancestors[functionNodeIndex] as Function;
+
     // Function declarations or expressions can be directly named
     if (currentNode.id?.type === 'Identifier') {
         return currentNode.id.name;
     }
+}
 
-    const parent = ancestors[functionNodeIndex - 1];
-
-    // If we don't have a parent node to provide an identifier
-    // or that parent is either a Property or MethodDefinition which
-    // identifier is dynamically assigned at run time, we cannot determine
-    // the proper identification for the node
-    if (!parent || (parent as Property | MethodDefinition).computed) return;
-
-    // Several node types can have an id prop of type Identifier
-    const { id } = parent as unknown as { id?: Identifier };
-    if (id?.type === 'Identifier') {
-        return id.name;
-    }
-
-    // Usually assignments to object properties (MethodDefinition, Property)
-    const { key } = parent as MethodDefinition | Property;
-    if (key?.type === 'Identifier') {
-        return key.name;
-    }
-
-    // Variable assignments have left hand side that can be used as Identifier
-    const { left } = parent as AssignmentExpression;
-    if (left?.type === 'Identifier') {
-        return left.name;
-    }
-};
-
-const wrapWithAwait = (node: Expression) => {
-    if (!node.type.includes('Expression')) {
+export function wrapWithAwait(node: Expression) {
+    if (!node.type.endsWith('Expression')) {
         throw new Error(`Can't wrap "${node.type}" with await`);
     }
 
@@ -55,9 +69,9 @@ const wrapWithAwait = (node: Expression) => {
     (node as AwaitExpression).argument = innerNode;
 
     Object.keys(node).forEach((key) => !['type', 'argument'].includes(key) && delete node[key as keyof AnyNode]);
-};
+}
 
-const asyncifyScope = (ancestors: AnyNode[], state: WalkerState) => {
+export function asyncifyScope(ancestors: AnyNode[], state: WalkerState) {
     const functionNodeIndex = ancestors.findLastIndex((n) => 'async' in n);
     if (functionNodeIndex === -1) return;
 
@@ -84,11 +98,10 @@ const asyncifyScope = (ancestors: AnyNode[], state: WalkerState) => {
     if (!identifier) return;
 
     state.functionIdentifiers.add(identifier);
-};
+}
 
-export const buildFixModifiedFunctionsOperation =
-    (functionIdentifiers: Set<string>): FullAncestorWalkerCallback<WalkerState> =>
-    (node, state, ancestors) => {
+export function buildFixModifiedFunctionsOperation(functionIdentifiers: Set<string>): FullAncestorWalkerCallback<WalkerState> {
+    return function _fixModifiedFunctionsOperation(node, state, ancestors) {
         if (node.type !== 'CallExpression') return;
 
         let isWrappable = false;
@@ -126,6 +139,7 @@ export const buildFixModifiedFunctionsOperation =
 
         state.isModified = true;
     };
+}
 
 export const checkReassignmentOfModifiedIdentifiers: FullAncestorWalkerCallback<WalkerState> = (node, { functionIdentifiers }, _ancestors) => {
     if (node.type === 'AssignmentExpression') {
@@ -156,7 +170,9 @@ export const checkReassignmentOfModifiedIdentifiers: FullAncestorWalkerCallback<
         return;
     }
 
-    if (node.type === 'Property') {
+    // "Property" is for plain objects, "PropertyDefinition" is for classes
+    // but both share the same structure
+    if (node.type === 'Property' || node.type === 'PropertyDefinition') {
         if (node.key.type !== 'Identifier' || functionIdentifiers.has(node.key.name)) return;
 
         if (node.value?.type !== 'Identifier' || !functionIdentifiers.has(node.value.name)) return;
